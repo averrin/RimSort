@@ -56,6 +56,10 @@ from app.utils.generic import (
 )
 from app.utils.metadata import MetadataManager, ModMetadata
 from app.views.deletion_menu import ModDeletionMenu
+from app.utils.startup_impact_metrics import (
+    get_total_ms_by_mod_name,
+    get_max_total_ms,
+)
 from app.views.dialogue import (
     show_dialogue_conditional,
     show_dialogue_input,
@@ -134,6 +138,7 @@ class ModListItemInner(QWidget):
         alternative: bool,
         settings_controller: SettingsController,
         uuid: str,
+        show_metrics: bool = False,
     ) -> None:
         """
         Initialize the QWidget with mod uuid. Metadata can be accessed via MetadataManager.
@@ -322,6 +327,28 @@ class ModListItemInner(QWidget):
             self.main_item_layout.addWidget(self.xml_icon, Qt.AlignmentFlag.AlignRight)
         # Compose the layout of our widget and set it to the main layout
         self.main_item_layout.addWidget(self.main_label, Qt.AlignmentFlag.AlignCenter)
+        # Optional separate metrics widget (right side), similar to warn/error icons
+        if show_metrics:
+            total_ms_by_name = get_total_ms_by_mod_name()
+            total_ms = total_ms_by_name.get(self.list_item_name.lower())
+            if isinstance(total_ms, int) and total_ms > 0:
+                self.metrics_text = f"{total_ms} ms"
+                self.metrics_label = QLabel(self.metrics_text)
+                # Conditional color based on relative impact vs. max
+                max_ms = get_max_total_ms()
+                if max_ms > 0:
+                    ratio = total_ms / max_ms
+                    # Simple thresholds: green < 0.25, orange < 0.6, red otherwise
+                    if ratio < 0.25:
+                        self.metrics_label.setStyleSheet("color: #2e7d32;")
+                    elif ratio < 0.6:
+                        self.metrics_label.setStyleSheet("color: #ef6c00;")
+                    else:
+                        self.metrics_label.setStyleSheet("color: #c62828;")
+                self.metrics_label.setToolTip(self.tr("StartupImpact: loading time"))
+                self.main_item_layout.addWidget(
+                    self.metrics_label, Qt.AlignmentFlag.AlignRight
+                )
         self.main_item_layout.addWidget(
             self.warning_icon_label, Qt.AlignmentFlag.AlignRight
         )
@@ -437,12 +464,16 @@ class ModListItemInner(QWidget):
         # Count the number of QLabel widgets with QIcon and calculate total icon width
         icon_count = self.count_icons(self)
         icon_width = icon_count * 20
+        # Include the optional metrics label width if present
+        metrics_width = 0
+        if hasattr(self, "metrics_text") and isinstance(self.metrics_text, str):
+            metrics_width = int(QRectF(self.font_metrics.boundingRect(self.metrics_text)).width()) + 8
         self.item_width = super().width()
         text_width_needed = QRectF(
             self.font_metrics.boundingRect(self.list_item_name)
         ).width()
-        if text_width_needed > self.item_width - icon_width:
-            available_width = self.item_width - icon_width
+        if text_width_needed > self.item_width - icon_width - metrics_width:
+            available_width = self.item_width - icon_width - metrics_width
             shortened_text = self.font_metrics.elidedText(
                 self.list_item_name, Qt.TextElideMode.ElideRight, int(available_width)
             )
@@ -1615,6 +1646,7 @@ class ModListWidget(QListWidget):
                 alternative=alternative,
                 settings_controller=self.settings_controller,
                 uuid=uuid,
+                show_metrics=(self.list_type == "Active"),
             )
             widget.toggle_warning_signal.connect(self.toggle_warning)
             widget.toggle_error_signal.connect(self.toggle_warning)
