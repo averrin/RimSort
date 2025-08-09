@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from app.models.image_label import ImageLabel
 from app.utils.app_info import AppInfo
 from app.utils.generic import platform_specific_open
+from app.utils.defs_summary import get_defs_summary
 from app.utils.metadata import MetadataManager
 from app.views.description_widget import DescriptionWidget
 from app.views.mods_panel import format_file_size, uuid_to_folder_size
@@ -104,6 +105,8 @@ class ModInfo:
         self.mod_info_mod_version = QHBoxLayout()
         self.mod_info_supported_versions = QHBoxLayout()
         self.mod_info_folder_size = QHBoxLayout()
+        self.mod_info_defs = QHBoxLayout()
+        self.mod_info_def_types = QHBoxLayout()
         self.mod_info_path = QHBoxLayout()
         self.mod_info_last_touched = QHBoxLayout()
         self.mod_info_filesystem_time = QHBoxLayout()
@@ -188,6 +191,15 @@ class ModInfo:
         self.mod_info_folder_size_label.setObjectName("summaryLabel")
         self.mod_info_folder_size_value = QLabel()
         self.mod_info_folder_size_value.setObjectName("summaryValue")
+        self.mod_info_defs_label = QLabel(self.tr("Defs:"))
+        self.mod_info_defs_label.setObjectName("summaryLabel")
+        self.mod_info_defs_value = QLabel()
+        self.mod_info_defs_value.setObjectName("summaryValue")
+        self.mod_info_def_types_label = QLabel(self.tr("Def Types:"))
+        self.mod_info_def_types_label.setObjectName("summaryLabel")
+        self.mod_info_def_types_value = QLabel()
+        self.mod_info_def_types_value.setObjectName("summaryValue")
+        self.mod_info_def_types_value.setWordWrap(True)
         self.mod_info_path_label = QLabel(self.tr("Path:"))
         self.mod_info_path_label.setObjectName("summaryLabel")
         self.mod_info_path_value = ClickablePathLabel()
@@ -248,6 +260,10 @@ class ModInfo:
         )
         self.mod_info_folder_size.addWidget(self.mod_info_folder_size_label, 20)
         self.mod_info_folder_size.addWidget(self.mod_info_folder_size_value, 80)
+        self.mod_info_defs.addWidget(self.mod_info_defs_label, 20)
+        self.mod_info_defs.addWidget(self.mod_info_defs_value, 80)
+        self.mod_info_def_types.addWidget(self.mod_info_def_types_label, 20)
+        self.mod_info_def_types.addWidget(self.mod_info_def_types_value, 80)
         self.mod_info_last_touched.addWidget(self.mod_info_last_touched_label, 20)
         self.mod_info_last_touched.addWidget(self.mod_info_last_touched_value, 80)
         self.mod_info_filesystem_time.addWidget(self.mod_info_filesystem_time_label, 20)
@@ -261,6 +277,8 @@ class ModInfo:
         self.mod_info_layout.addLayout(self.mod_info_mod_version)
         self.mod_info_layout.addLayout(self.mod_info_supported_versions)
         self.mod_info_layout.addLayout(self.mod_info_folder_size)
+        self.mod_info_layout.addLayout(self.mod_info_defs)
+        self.mod_info_layout.addLayout(self.mod_info_def_types)
         self.mod_info_layout.addLayout(self.mod_info_path)
         self.mod_info_layout.addLayout(self.mod_info_last_touched)
         self.mod_info_layout.addLayout(self.mod_info_filesystem_time)
@@ -286,6 +304,10 @@ class ModInfo:
             self.mod_info_supported_versions_value,
             self.mod_info_folder_size_label,
             self.mod_info_folder_size_value,
+            self.mod_info_defs_label,
+            self.mod_info_defs_value,
+            self.mod_info_def_types_label,
+            self.mod_info_def_types_value,
             self.mod_info_last_touched_label,
             self.mod_info_last_touched_value,
             self.mod_info_filesystem_time_label,
@@ -445,6 +467,36 @@ class ModInfo:
                     self.mod_info_filesystem_time_value.setText("Invalid timestamp")
             else:
                 self.mod_info_filesystem_time_value.setText("Not available")
+
+            # Set Defs summary
+            try:
+                if mod_path and os.path.exists(mod_path):
+                    summary = get_defs_summary(mod_path)
+                    self.mod_info_defs_value.setText(
+                        f"{summary.total_defs} in {summary.files_scanned} files"
+                    )
+                    # Build compact display of top types
+                    if summary.type_counts:
+                        sorted_items = sorted(
+                            summary.type_counts.items(), key=lambda kv: kv[1], reverse=True
+                        )
+                        parts = [f"{k}: {v}" for k, v in sorted_items]
+                        compact = ", ".join(parts[:6]) + (" …" if len(parts) > 6 else "")
+                        self.mod_info_def_types_value.setText(compact if compact else "None")
+                        self.mod_info_def_types_value.setToolTip(
+                            ", ".join(parts) if parts else ""
+                        )
+                    else:
+                        self.mod_info_def_types_value.setText("None")
+                        self.mod_info_def_types_value.setToolTip("")
+                else:
+                    self.mod_info_defs_value.setText("Not available")
+                    self.mod_info_def_types_value.setText("Not available")
+                    self.mod_info_def_types_value.setToolTip("")
+            except Exception:
+                self.mod_info_defs_value.setText("Not available")
+                self.mod_info_def_types_value.setText("Not available")
+                self.mod_info_def_types_value.setToolTip("")
 
             # Set external workshop times
             external_times = []
